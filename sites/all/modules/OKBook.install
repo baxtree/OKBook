@@ -1,0 +1,53 @@
+<?php
+	function OKBook_install(){
+	/*
+		switch ($GLOBALS['db_type']) {
+		case 'mysql':
+		case 'mysqli':
+		  // the {tablename} syntax is so multisite installs can add a
+		  // prefix to the table name as set in the settings.php file
+		  db_query("CREATE TABLE {node_field_nodereference_data} (
+			  vid int unsigned NOT NULL default '0',
+			  field_name varchar(32) NOT NULL default '',
+			  delta int unsigned NOT NULL default '0',
+			  field_nid int unsigned NOT NULL default '0',
+			  PRIMARY KEY  (vid,field_name,delta)
+			);");
+		  break;
+
+		case 'pgsql':
+		  db_query("CREATE TABLE {node_field_nodereference_data} (
+			  vid serial CHECK (vid >= 0),
+			  field_name varchar(32) NOT NULL default '',
+			  delta integer NOT NULL default '0' CHECK (delta >= 0),
+			  field_nid integer NOT NULL default '0' CHECK (field_nid >= 0),
+			  PRIMARY KEY  (vid, field_name, delta)
+			)");
+
+		  // Pgsql requires keys and indexes to be defined separately.
+		  // It's important to name the index as {tablename}_fieldname_idx
+		  // (the trailing _idx!) so update scripts can be written easily
+		  db_query("CREATE INDEX {node_field_nodereference_data}_field_name_idx
+					ON {node_field_nodereference_data} (field_name)");
+		break;
+	*/
+	}
+	
+	function OKBook_update_1(){
+	
+	}
+	
+	function OKBook_uninstall(){
+	/*
+		db_query('DROP TABLE {search_dataset}');
+		db_query('DROP TABLE {search_index}');
+		db_query('DROP TABLE {search_total}');
+		variable_del('minimum_word_size');
+		variable_del('overlap_cjk');
+  
+		cache_clear_all('*', 'cache', TRUE);
+		cache_clear_all('*', 'cache_filter', TRUE);
+		cache_clear_all('*', 'cache_menu', TRUE);
+		cache_clear_all('*', 'cache_page', TRUE);
+	*/
+	}

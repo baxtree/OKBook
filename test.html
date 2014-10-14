@@ -1,0 +1,202 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" >
+<head runat="server">
+    <mate http-equiv="Pragma" content="no-cache"/>
+    <title>Suggestion Test</title>
+    <style type="text/css">
+    对应的样式如下：
+            .item_normal
+            {
+                BORDER-LEFT: #666 0px solid;
+                BORDER-RIGHT: #666 0px solid;
+                background-color:#ffffff;
+                overflow:hidden;
+            }
+            .itemBg
+            {
+                BORDER-LEFT: #666 0px solid;
+                BORDER-RIGHT: #666 0px solid;
+                cursor:default;
+                background-color:#ffffff;
+            }
+            .item_high
+            {
+                background-color:#326BC5;
+                cursor:default;
+                color:white;
+            }
+            .item_button
+            {
+				BORDER-LEFT: #666 0px solid;
+                BORDER-RIGHT: #666 0px solid;
+                text-align:right;
+                background-color:#ffffff;
+                cursor:hand;
+            }
+            .suggest_hidden
+            {
+                display:none;
+            }
+</style> 
+<script type="text/javascript">
+//下面来开始写JAVASCRIPT。
+        //首先创建XMLHttpRequest对象。我把它写成一个方法，以免多次调用。
+    var array = new Array();//定义一个全局变量数组，用来存放拆分字符串的值
+    var zz = -1;//此为指针，后面用到
+    
+	//第二步，创建beKeyUp方法，正是键盘按下后松开时的方法，在文本框那里调用。
+    function beKeyUp()
+            {
+                var key = document.getElementById("keywords").value;
+                if(key.length>0)//有值才POST，这里最好加个Trim()方法，但是JAVASCRIPT没有现成的方法，自己定义。
+                {
+				    var xmlhttpRequest;
+                    if(window.XMLHttpRequest){
+						xmlhttpRequest = new window.XMLHttpRequest();
+					}
+					else if(window.ActiveXObject){
+						xmlhttpRequest = new window.ActiveXObject("XMLHTTP");
+					}
+                   
+                    xmlhttpRequest.open("GET","http://localhost:10081/drupal/sites/all/modules/OKpublisher/suggestion.php?key=" + key,true);//POST
+                    xmlhttpRequest.onreadystatechange = function () {
+						if(xmlhttpRequest.readyState==4)
+						{
+							if(xmlhttpRequest.status==200)
+							{
+								var responseStr=decodeURI(xmlhttpRequest.responseText);//获取返回值
+								if(responseStr.length>0)//返回值不为空才执行下面的代码
+								{
+									array=responseStr.split(',');//根据‘ |’拆分，根据自己任意特殊字符，初始化数组
+									positionDiv();//调用方法，定位DIV显示，具体见方法解释
+									document.getElementById("search_suggest").innerHTML="";//每次清空DIV内容
+									for(var i=0;i <array.length;i++)
+									{
+										if(array[i]!="")//项值不为空，组合DIV，每个DIV有onmouseover、onmouseout、onclick对应事件
+										{
+											document.getElementById("search_suggest").innerHTML+=" <div id='item" + i + "' class='itemBg' onmouseover='beMouseOver(" + i +")' onmouseout='beMouseOut(" + i + ")' onclick='beClick(" + i + ")'>" + decodeURI(array[i]) + " </div>";
+										}
+									}
+									//最后一个DIV显示 关闭 效果 onclick方法
+									document.getElementById("search_suggest").innerHTML+=" <div class='item_button' onclick='hiddenDiv();'> <font color='#999999'>close</font> </div>";
+									document.getElementById("search_suggest").style.display="inline";
+								}
+								else
+								{
+									document.getElementById("search_suggest").style.display="none";
+								}
+							}
+						}
+					};//返回状态调用方法stateChange
+                    xmlhttpRequest.send(null);
+                }
+            }
+			            //定位DIV显示
+            function positionDiv()
+            {
+                var DivRef= document.getElementById("search_suggest");
+                DivRef.style.position = "absolute";
+                var t=document.getElementById("keywords");
+                DivRef.style.top= getAbsolutePos(t).y;//相对文本框的TOP高度，方法见下面
+                DivRef.style.left= getAbsolutePos(t).x ;//相对文本框的LEFT宽度
+                DivRef.style.height=array.length * 20;//DIV的高度等于每行20个象素乘行数（也就是数组的长度，体现全局数组的作用，不然要传入数组长度的参数）
+            }
+            //实现最后一个DIV 关闭 onclick方法
+            function hiddenDiv()
+            {
+                document.getElementById("search_suggest").style.display="none";
+            }
+            //定位方法，不做解释
+            function getAbsolutePos(el)
+            {
+                var SL = 0, ST = 0;
+                var is_div = /^div$/i.test(el.tagName);
+                if (is_div && el.scrollLeft) SL = el.scrollLeft;
+                if (is_div && el.scrollTop) ST = el.scrollTop;
+                var r = { x: el.offsetLeft - SL, y: el.offsetTop - ST };
+                if (el.offsetParent)
+                {
+                    var tmp = this.getAbsolutePos(el.offsetParent);
+                    r.x += tmp.x;
+                    r.y += tmp.y;
+                }
+                return r;
+            }
+           
+            //最后是鼠标效果的方法。
+            //函数鼠标经过效果       
+            function beMouseOverEFF(i)
+            {
+                if ((i>=0)&(i <=array.length-1))
+                {
+                    document.getElementById("item" + i).className="item_high";
+                }
+            }
+
+            //函数鼠标移开效果
+            function beMouseOutEFF(i)
+            {
+                if ((i>=0)&(i <=array.length-1))
+                {
+                    document.getElementById("item" + i).className="item_normal";
+                }
+            }
+
+            //函数鼠标经过
+            function beMouseOver(i)
+            {
+                document.getElementById("keywords").focus();
+                beMouseOutEFF(zz);
+                zz=i;
+                beMouseOverEFF(zz);
+            }
+
+            //函数鼠标移开
+            function beMouseOut(i)
+            {
+                beMouseOutEFF(i);
+            }
+            //函数单击
+            function beClick(i)
+            {
+				//url = "http://www.dbpedia.org/resourse/" + encodeURI(array[i]);
+				/*url = "http://localhost:8080/IMAnnotator/org/openk/annotator/servlet/DBPediaMetaDataServlet?refinedkeyword=" + encodeURI(array[i]);
+				var req;
+				if(window.XMLHttpRequest){
+					req = new window.XMLHttpRequest();
+				}
+				else if(window.ActiveXObject){
+					req = new window.ActiveXObject("XMLHTTP");
+				}
+				req.open("GET", url, true);
+				req.onreadystatechange = function () {
+					if(req.readyState == 4){
+						if(req.status == 200){
+							alert(req.responseText);
+							document.getElementById("KProvince").value=document.getElementById("KProvince").value + " class:" + req.responseText;
+							document.getElementById("search_suggest").style.display="none";
+							document.getElementById("KProvince").focus();
+						}
+						else{
+							document.getElementById("search_suggest").style.display="none";
+							document.getElementById("KProvince").focus();
+						}
+					}
+					else{
+						document.getElementById("search_suggest").style.display="none";
+						document.getElementById("KProvince").focus();
+					}
+				}
+				req.send(null);*/
+               document.getElementById("keywords").value= document.getElementById("keywords").value + " class:" + array[i];
+							document.getElementById("search_suggest").style.display="none";
+							document.getElementById("keywords").focus();
+            }
+</script> 
+</head>
+<body>
+<input id="keywords" style="width: 150px;" autocomplete="off" onkeyup="beKeyUp();" />
+<div id="search_suggest" style="position:relative;z-index:1;"></div>
+</body>
+</html>

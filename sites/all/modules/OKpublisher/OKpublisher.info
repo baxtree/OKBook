@@ -1,0 +1,4 @@
+name = OKpublisher
+description = this module assists people in publishing Interaction Models.
+core = 6.x
+package = "OpenKnowledge"

@@ -1,0 +1,353 @@
+<?php
+// $Id:  $
+//include_once(drupal_get_path('module', 'OKBook') . '/arc/ARC2.php');
+include_once('arc/ARC2.php');
+ 
+function OKBook_hook_test($text){		
+	print_r($text);
+}
+
+function OKBook_setup_sparql_endpoint(){
+	
+    /* ARC2 static class inclusion */ 
+    //$rdf_api_path = drupal_get_path('module', 'rdf');
+    //echo $rdf_api_path;
+    //$arc_api_path = $rdf_api_path . '/vendor/arc/ARC2.php';
+    //echo $arc_api_path;
+
+    /* MySQL and endpoint configuration */ 
+    $config = array(
+        /* db */
+        'db_host' => '127.0.0.1', /* optional, default is localhost */
+        'db_name' => 'rdftriplestore',
+        'db_user' => 'root',
+        'db_pwd' => '123456',
+
+        /* store name */
+        'store_name' => 'triple_store',
+
+        /* endpoint */
+        'endpoint_features' => array(
+            'select', 'construct', 'ask', 'describe', 
+            'load', 'insert', 'delete', 
+            'dump' /* dump is a special command for streaming SPOG export */
+        ),
+        'endpoint_timeout' => 60, /* not implemented in ARC2 preview */
+        'endpoint_read_key' => '', /* optional */
+        'endpoint_write_key' => 'somekey', /* optional */
+        'endpoint_max_limit' => 250, /* optional */
+        );
+
+    /* instantiation */
+    $ep = ARC2::getStoreEndpoint($config);
+
+    if (!$ep->isSetUp()) {
+        $ep->setUp(); /* create MySQL tables */
+    }
+
+    /* request handling */
+    $ep->go();
+}
+
+function OKBook_IM_indexing(){
+	$sql = 'SELECT nid FROM node WHERE type="interaction_model"';
+    $res = db_query($sql);
+    $urlcsv = '';
+    while($object = db_fetch_object($res)){
+        $url = 'http://localhost:10081/drupal/' . drupal_get_path_alias('node/' . $object->nid);
+        $urlcsv = $urlcsv . $url . ',';
+    }
+	echo '<button id="indexing" name="indexing" style="width: 260px; height: 25px" onclick="OKBook_indexing(\'' . $urlcsv . '\');">Index all IMs on OKBook</button><br/>';
+    echo '<div id="info"></div>';
+}
+
+function OKBook_IM_harvesting(){
+/*
+	$module_folder = drupal_get_path('module', 'OKpublisher');
+	echo '<button id="indexing" name="indexing" style="width: 260px; height: 25px" onclick="OKBook_harvesting();">Harvest all RDFa on OKBook</button><br/>';
+	echo '<div id="info"></div>';
+	*/
+}
+
+function OKBook_peer_grouping(){
+	$js_path = drupal_get_path("module", "OKBook");
+    $full_path = $js_path . "/php.js";
+    drupal_add_js($full_path);
+    $full_path = $js_path . "/analyze.js";
+    drupal_add_js($full_path);
+    $loading_path = $js_path . "/ajax-loader.gif";
+    global $user;
+    if(!$user->uid){
+        form_set_error('Please log in first or create a new account');
+        drupal_goto('user/login', 'destination=mygroup.html');
+    }
+    $parteners = "";
+    $peer_id = $user->uid;
+    $current_user = user_load($peer_id);
+    $current_user_kb = $current_user->profile_local_kb;
+    //echo $peer_id;
+    echo '<html>';
+        echo '<head>';
+        echo '<script type="text/javascript">';
+        echo 'function showmygroup() {';
+        echo 'var parteners = "' . $parteners . '";';
+        echo 'parteners = parteners.substring(0, parteners.length-1);';
+        echo 'var pas = parteners.split(" ");';
+        echo '}';
+        echo '</script>';
+        echo '</head>';
+        echo '<body onload="showmygroup();">';
+    $sql = 'SELECT DISTINCT im_id, execution_datetime FROM im_execution WHERE peer_id = "' . $peer_id . '"';
+    $res = db_query($sql);
+    while($object = db_fetch_object($res)){
+        $sql2 = 'SELECT DISTINCT peer_id FROM im_execution WHERE im_id="' . $object->im_id . '" AND execution_datetime="' . $object->execution_datetime . '"';
+        $res2 = db_query($sql2);
+        while($object2 = db_fetch_object($res2)){
+            $peer = user_load($object2->peer_id);
+            if($peer->name != $user->name && $peer->name != '' && $peer->name != null){
+                print_r('<a href="mailto:'. $peer->mail .'"><span style="color:green">' . $peer->name . '</span></a><br/>');
+                $sql3 = 'SELECT DISTINCT im_id FROM im_execution WHERE peer_id="' . $object2->peer_id . '"';
+                $res3 = db_query($sql3);
+                while($object3 = db_fetch_object($res3)){
+                    $interaction_model = node_load($object3->im_id);
+                    $base = "http://localhost:10081/drupal/node/" . $object3->im_id . "#";
+                    print_r('<span style="padding-left:30px;text-align:left;color:blue"><a href="' . $interaction_model->path . '">' . $interaction_model->title . '</a></span><button id="analyze" name="analyze" onclick="analyze(\'' . urlencode($interaction_model->body) . '\',\'' . urlencode($current_user_kb) . '\',\'' . urlencode($base) . '\',\'' . urlencode($js_path). '\',\'' . $peer->name . '\',' . $peer_id . ',' . $object3->im_id . ');">analyze</button><img id="loading" src="' . $loading_path . '" style="display:none;"></img>&nbsp;&nbsp;&nbsp;');
+                }           
+            }
+            else{
+                 continue;
+            }
+            echo '<div id="' . $peer->name . '"></div>';
+        }
+        
+    }
+    echo '</body>';
+    echo '</html>';
+}
+
+function OKBook_IM_republishing(){
+	global $user;
+    if(!$user->uid){
+        form_set_error('Please log in first or create a new account');
+        drupal_goto('user/login', 'destination=imrepublication.html');
+    }
+	echo '<div id="preprocess">';
+    echo '<p>IM Content:</p>';
+
+    echo '<form id="preprocessform" target="beginannotation" enctype="multipart/form-data" method="post" action="http://localhost:10081/IMAnnotator/org/openk/annotator/servlet/DataRetrieverServlet">';
+    echo '<P>Your IM Profile:</P>';
+    echo '<input type="file" name="IMfile">';
+    echo '<P>Your Local Profile:</P>';
+    echo '<input type="file" name="localKB">';
+    echo '<p>Push the submit button and start your annotation</p>';
+    echo '<button id="submit" name="submit!" value = "submit!" style="width:80px; height:25px" onclick="presubmit();">begin!</button>';
+    echo '</form>';
+    echo '</div>';
+    echo '<iframe src="" name="beginannotation" id="matchresult" frameborder="0" width=800 height=500></iframe>';
+}
+
+function OKBook_IM_searching(){
+	global $user;
+    if(!$user->uid){
+        form_set_error('Please log in first or create a new account');
+        drupal_goto('user/login', 'destination=currentIMs.html');
+    }
+    $module_folder = drupal_get_path('module', 'OKBook');
+    //echo $module_folder;
+    $php_js_path = $module_folder . '/php.js';
+    $analyze_js_path = $module_folder . '/analyze.js';
+    $suggestion_js_path = $module_folder . '/suggestion.js';
+    $suggestion_css_path = $module_folder . '/suggestion.css';
+    drupal_add_js($php_js_path);
+    drupal_add_js($analyze_js_path);
+    drupal_add_js($suggestion_js_path);
+    drupal_add_css($suggestion_css_path);
+    $loading_path = $module_folder . "/ajax-loader.gif"; 
+    $uid = $user->uid;
+    $current_user = user_load($uid);
+    $current_user_kb = $current_user->profile_local_kb;
+    $current_user_kb = urlencode($current_user_kb);
+echo <<< eot
+<script type="text/javascript" src="$php_js_path"></script>
+<script type="text/javascript" src="$analyze_js_path"></script>
+<script type="text/javascript">
+    var loading_path = "$loading_path";
+    function queryURI(){
+        var result_node = document.getElementById("searchresults");
+        result_node.innerHTML = "";
+        var keywords = document.getElementById("query");
+        var pager = document.getElementById("pager");
+        var info = document.getElementById("info");
+        info.innerHTML = "";
+        var index = pager.selectedIndex;
+        var pageid = pager.options[index].value;
+        var url = "/IMAnnotator/org/openk/annotator/servlet/QueryServlet?query="+keywords.value+"&page="+pageid;
+        url = encodeURI(url);
+        var req;
+        if(window.XMLHttpRequest){
+            req = new window.XMLHttpRequest();
+        }
+        else if(window.ActiveXObject){
+            req = new window.ActiveXObject("XMLHTTP");
+        }
+        //req.setRequestHeader("Content-Type", "application/json");
+        req.open("GET", url, true);
+        req.onreadystatechange = function () {
+            if(req.readyState == 4){
+                if(req.status == 200){
+                    var result = eval("("+req.responseText+")");
+                    if(result.entries[0] == "" || result.entries[0] == undefined){
+                        info.innerHTML = "<label style='color:red'>No page found.</label>";
+                    }
+                    else{
+                        for(var i = 0; i < result.entries.length; i++){
+                            var alias_url = result.entries[i].link;
+                            var temp = alias_url.split("/");
+                            alias_name = temp[temp.length-1];
+                            
+                            var html_snippet = "<ul>";
+                            html_snippet += "<li><a href='"+result.entries[i].link+"'>"+result.entries[i].link+"</a></li>";
+                            html_snippet += "<li><span id='"+alias_name+"rating' style='color:red'></span></li>";
+                            //html_snippet +="<button onclick='getRates(\""+alias_name+"\");'></button>";
+                            html_snippet += "<li>"+result.entries[i].content+"<button id='analyze' name='analyze' value='analyze' style='width: 60px; height: 25px' onclick='preanalyze(\""+alias_name+"\");'>analyze</button><img id='loading' src='" + loading_path + "' style='display:none;'></img></li></ul>";
+                            html_snippet +="<div id='analyze"+alias_name+"'></div>";
+                            html_snippet +="<div id='analyzeerror"+alias_name+"'></div>";
+                            result_node.innerHTML += html_snippet;
+                        }
+                    }
+                }
+            }
+        }
+        req.send(null);
+   }
+function getRates(alias_name){
+    var req2;
+    var rating_url = "$module_folder"+"/rating.php?alias="+alias_name;
+    if(window.XMLHttpRequest){
+        req2 = new window.XMLHttpRequest();
+    }                            
+    else if(window.ActiveXObject){
+        req2 = new window.ActiveXObject("XMLHTTP");
+    }
+    req2.open("GET", rating_url, true);
+    req2.onreadystatechange = function (){
+    if(req2.readyState == 4){
+        if(req2.status == 200){    
+            //alert(req2.responseText);                            
+            var rating_obj = eval("("+req2.responseText+")");
+            var rate_ele = document.getElementById(alias_name+"rating");
+            rate_ele.innerText = rating_obj.rating;
+        }
+    }
+    req2.send(null);
+    }
+}
+
+function preanalyze(alias_name) {
+     var req1;
+     var lookup_url = "$module_folder"+"/lookup.php?alias="+alias_name;
+     if(window.XMLHttpRequest){
+         reql = new window.XMLHttpRequest();
+     }                            
+     else if(window.ActiveXObject){
+         reql = new window.ActiveXObject("XMLHTTP");
+     }
+     reql.open("GET", lookup_url, true);
+     reql.onreadystatechange = function (){
+         if(reql.readyState == 4){
+             if(reql.status == 200){
+                 //alert(reql.responseText);
+                 var temp_obj = eval("("+reql.responseText+")");
+                 var nid = temp_obj.nodeid;
+                 var body = temp_obj.body;
+                 var rating = temp_obj.rating;
+                 var base = "http://localhost:10081/drupal/node/"+nid+"#";
+                 var analysis_id = "analyze" + alias_name;
+                 //alert(analysis_id);
+                 analyze(body, '$current_user_kb', urlencode(base), urlencode('$module_folder'), analysis_id, '$uid', nid);           
+             }
+         }
+     }
+     reql.send(null);
+}
+</script>
+<center>
+<input id="query" type="text" style="width:350px" autocomplete="off" onkeyup="beKeyUp();">
+</input>
+<div id="search_suggest" style="position:relative;z-index:1;"></div>
+<select id="pager">
+</select>
+<script type="text/javascript">
+    var select_node = document.getElementById("pager");
+    var item_snippet = "";
+    for(var i = 1; i <= 50; i++){
+        item_snippet += "<option value='"+i+"'>"+i+"</option>";
+    }
+    select_node.innerHTML = item_snippet;
+</script>
+<button id="submit" value="submit" onclick="queryURI();" style="width:35px;height:30px">go</button><br/>
+<div id="search_suggest" style="position:relative;z-index:1;"></div>
+<label>Powered by <a href="http://www.sindice.com/"><img style="width:45px;height:18px" src="$module_folder/sindice.jpeg"></img></a></label>
+<div id="info">
+</div>
+</center>
+<div id="searchresults">
+</div>
+eot;
+}
+
+function OKBook_IM_browsing(){
+	global $user;
+    if(!$user->uid){
+        form_set_error('Please log in first or create a new account');
+        drupal_goto('user/login', 'destination=currentIMs.html');
+    }
+    $js_path = drupal_get_path("module", "OKBook");
+    //echo "path : " . $js_path;
+	$full_path = $js_path . "/jsapi.js";
+    drupal_add_js($full_path);
+    $full_path = $js_path . "/php.js";
+    drupal_add_js($full_path);
+    $full_path = $js_path . "/analyze.js";
+    drupal_add_js($full_path);
+    $loading_path = $js_path . "/ajax-loader.gif";
+    $current_user = user_load($user->uid);
+    $current_user_kb = $current_user->profile_local_kb;
+    $sql = 'SELECT n.title, n.nid, nr.body FROM {node} n, {node_revisions} nr WHERE n.type="interaction_model" AND n.nid = nr.nid';
+    $res = pager_query($sql, 1);
+    //echo 'Interaction Models:';
+    while($obj = db_fetch_object($res)){
+        $base = "http://localhost:10081/drupal/node/" . $obj->nid . "#";
+        $analysis_id = 'analysisresult' . $obj->nid;
+		$graph_id = 'graph' . $obj->nid;
+        echo t('<li><h1>' . $obj->title . '</h1><button id="analyze" name="analyze" value="analyze" style="width: 60px; height: 25px" onclick="analyze(\'' . urlencode($obj->body) . '\',\'' . urlencode($current_user_kb) . '\',\'' . urlencode($base) . '\',\'' . urlencode($js_path). '\',\'' . $analysis_id . '\',' . $user->uid . ',' . $obj->nid . ');">analyze</button><img id="loading" src="' . $loading_path . '" style="display:none;"></img></li><li><button id="graph" name="graph" value="graph" style="width: 60px; height: 25px" onclick="showgraph(\'' . urlencode($obj->body) . '\',\'' . urlencode($base) . '\',\'' . $graph_id . '\');">graph</button></li>');
+        
+        echo '<div id=\'' . $analysis_id . '\'></div>';
+        echo $obj->body;
+		echo '<div id=\'' . $graph_id . '\'></div>';
+        echo '<div><a href="http://localhost:10081/drupal/node/' . $obj->nid . '">go to the page of this IM</a></div>';
+		echo '<div id="chart_div"></div>';
+    }
+    $mypager = theme('pager', NULL, 10, 0);
+    echo $mypager;
+}
+
+function OKBook_subsription_snapshot(){
+	$sql = 'SELECT peer_id, im_id, role_uri, subscription_datetime from {im_subscription} ORDER BY im_id';
+    $res = db_query($sql, 10);
+    echo '<table boader = "1" bgcolor="#D8D8D8" cellpadding="5">';
+    echo '<tr><th align="center">im</th align="center"><th align="center">peer</th><th align="center">contact</th><th align="center">filled role</th><th align="center">sub_time</th></tr>';
+    while($obj = db_fetch_object($res)){
+        $peer = user_load($obj->peer_id);
+        $im = node_load($obj->im_id);
+        //$phpdatetime = strtotime($obj->subscription_datetime);
+        echo '<tr>';
+        echo '<td>' . $im->title . '</td>';
+        echo '<td>' . $peer->name . '</td>';
+        echo '<td><a href="mailto:' . $peer->mail . '">' . $peer->mail . '</td>';
+        echo '<td>' . $obj->role_uri . '</td>';
+        echo '<td>' . $obj->subscription_datetime . '</td>';
+        echo '</tr>';
+    }
+    echo '</table>';
+}

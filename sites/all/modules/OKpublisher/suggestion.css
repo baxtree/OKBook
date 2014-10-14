@@ -1,0 +1,32 @@
+      .item_normal
+            {
+                BORDER-LEFT: #666 0px solid;
+                BORDER-RIGHT: #666 0px solid;
+                background-color:#ffffff;
+                overflow:hidden;
+            }
+      .itemBg
+            {
+                BORDER-LEFT: #666 0px solid;
+                BORDER-RIGHT: #666 0px solid;
+                cursor:default;
+                background-color:#ffffff;
+            }
+      .item_high
+            {
+                background-color:#326BC5;
+                color:white;
+                cursor:default;
+            }
+      .item_button
+            {
+				BORDER-LEFT: #666 0px solid;
+                BORDER-RIGHT: #666 0px solid;
+                text-align:right;
+                background-color:#ffffff;
+                cursor:hand;
+            }
+      .suggest_hidden
+            {
+                display:none;
+            }
